@@ -231,6 +231,9 @@ const setsDone = (rec) => rec.exercises.reduce((a,e) => a + e.sets.filter(isDone
 const setsTotal = (rec) => rec.exercises.reduce((a,e) => a + e.sets.length, 0);
 // Rough session length: sets x (40 s work + rest).
 const minutes = (day) => Math.round(PROGRAM[day].ex.reduce((a,e) => a + e[1]*(40 + restSec(e[3])), 0) / 60 / 5) * 5;
+// Today's session is the weekday's by default. A pick made in the Gym tab overrides it for that date only; the next day the plan takes over again.
+const activeDay = () => { const k = today(), p = DB.pick; return p && p.date === k && PROGRAM[p.day] ? p.day : dayName(k); };
+function pickDay(d){ if (PROGRAM[d]) DB.pick = {date:today(), day:d}; else delete DB.pick; commit(); }
 
 /* ================= theme ================= */
 // Dark by default. index.html applies the saved choice before first paint; "auto" follows the phone.
@@ -281,7 +284,7 @@ function App(){
 /* ================= Today ================= */
 const lastW = () => DB.bw.length ? DB.bw[DB.bw.length-1] : null;
 function Today({nav}){
-  const k = today(), t = totals(k), S = DB.set, kt = kcalTarget(), day = dayName(k), P = PROGRAM[day];
+  const k = today(), t = totals(k), S = DB.set, kt = kcalTarget(), day = activeDay(), P = PROGRAM[day];
   const lw = lastW(), logged = lw && lw.date === k;
   const setW = (v) => { v = num(v); if (v > 20 && v < 300) { addBw(DB, today(), r1(v)); commit(); } };
   const m = MEAL[mealTab], mv = mealVal(m[0]), pMax = Math.max(100, mv.p), kMax = Math.max(1200, mv.k);
@@ -317,7 +320,7 @@ function Today({nav}){
       ${MEAL.map((x) => { const v = mealVal(x[0]); return html`<div class="row"><span>${x[1]}</span><b>${v.p || v.k ? `${Math.round(v.p)} g · ${Math.round(v.k)} kcal` : "not logged"}</b></div>`; })}
       ${other > 1 && html`<div class="row"><span>Other</span><b>${Math.round(otherP)} g · ${Math.round(other)} kcal</b></div>`}
     </div>
-    <h2>Gym<small>${P ? `${day} · ${P.title}` : "Rest day"}</small></h2>
+    <h2>Gym<small>${P ? `${dayName(k)} · ${P.title}` : "Rest day"}</small></h2>
     ${P ? html`<div class="start"><div><b>${P.title}</b><span class="sub">${n ? `${n} of ${setsTotal(rec)} sets done` : `${P.ex.length} exercises · about ${minutes(day)} min`}</span></div>
       <button class="btn ic-l" onClick=${() => nav.go("gym")}><${Ic} n="gym"/>${n ? "Continue" : "Start"}</button></div>`
       : html`<div class="start"><div><b>Rest day</b><span class="sub">Eat, sleep, back on Monday.</span></div></div>`}`;
@@ -325,12 +328,17 @@ function Today({nav}){
 
 /* ================= Gym ================= */
 function Gym({nav}){
-  const day = dayName(today()), P = PROGRAM[day];
-  if (!P) return html`<h1>Rest day</h1><div class="card"><p>No session today. The next one is Monday.</p></div>`;
+  const real = dayName(today()), day = activeDay(), P = PROGRAM[day];
+  // Native select: one tap opens the phone's own list. "Rest day" is offered only on the rest day and clears the pick.
+  const pick = html`<select class="inp grow" style="width:100%;margin:0 0 12px" name="workout" aria-label="Today's workout" onChange=${(e) => pickDay(e.target.value)}>
+    ${!PROGRAM[real] && html`<option value="" selected=${!P}>Rest day</option>`}
+    ${Object.keys(PROGRAM).map((d) => html`<option value=${d} selected=${d === day}>${PROGRAM[d].title}${d === real ? " (planned today)" : ""}</option>`)}</select>`;
+  if (!P) return html`<h1>Rest day</h1><div class="card"><p>No session today. The next one is Monday.</p></div><h2>Training anyway?</h2>${pick}`;
   const rec = session(day), n = setsDone(rec), tot = setsTotal(rec);
   return html`
-    <div class="sub">${day} · ${P.title}</div><h1>Gym</h1>
+    <div class="sub">${real} · ${P.title}</div><h1>Gym</h1>
     <p class="sub" style="margin:-6px 4px 8px">Every set is pre-filled. Tick each one. Change a weight and the sets after it follow.</p>
+    ${pick}
     <div class="prog"><div class="sub"><span>${n} of ${tot} sets</span><span>about ${minutes(day)} min</span></div><div class="bar"><i style=${`width:${100*n/tot}%`}></i></div></div>
     ${rec.exercises.map((x, i) => { const e = EX[x.name], heavy = e && isHeavy(e), why = e ? prescribe(e, rec).why : "";
       return html`<div class=${"ex" + (x.sets.every(isDone) ? " done" : "")}>

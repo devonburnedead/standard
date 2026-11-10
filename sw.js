@@ -1,5 +1,5 @@
 // Network first, cache as the offline fallback: a deploy shows on the next open, and the gym with no signal still works.
-const CACHE = "standard-v9";
+const CACHE = "standard-v10";
 const SHELL = ["./", "./index.html", "./app.js", "./data.js", "./vendor/preact-htm.js", "./vendor/inter-latin-400-normal.woff2", "./vendor/inter-latin-600-normal.woff2", "./vendor/inter-latin-800-normal.woff2", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png"];
 self.addEventListener("install", (e) => e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting())));
 // Only our own old caches: another app on the same origin (Daily Standard) keeps its cache.
